@@ -6,6 +6,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Arrays;
 
 public class Main {
     public static void main(String[] args) {
@@ -28,11 +29,16 @@ public class Main {
             try {
                 if (clientSocket != null) {
                     InputStream inputStream = clientSocket.getInputStream();
+                    //System.out.println(Arrays.toString(inputStream.readAllBytes()));
+                    byte[] request_api_key = inputStream.readNBytes(2);
+                    byte[] request_api_version = inputStream.readNBytes(2);
+                    byte[] correlation_id = inputStream.readNBytes(4);
+
                     OutputStream outputStream = clientSocket.getOutputStream();
                     ByteBuffer buffer = ByteBuffer.allocate(8);
                     buffer.order(ByteOrder.BIG_ENDIAN);
                     buffer.putInt(0);           // message_size
-                    buffer.putInt(7);           // correlation_id
+                    buffer.put(correlation_id);           // correlation_id
                     outputStream.write(buffer.array());
                     outputStream.flush();
                     clientSocket.close();
