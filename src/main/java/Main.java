@@ -4,6 +4,8 @@ import java.io.OutputStream;
 import java.io.Reader;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 
 public class Main {
     public static void main(String[] args) {
@@ -27,8 +29,11 @@ public class Main {
                 if (clientSocket != null) {
                     InputStream inputStream = clientSocket.getInputStream();
                     OutputStream outputStream = clientSocket.getOutputStream();
-                    outputStream.write(("1\n").getBytes());
-                    outputStream.write(("7\n").getBytes());
+                    ByteBuffer buffer = ByteBuffer.allocate(8);
+                    buffer.order(ByteOrder.BIG_ENDIAN);
+                    buffer.putInt(0);           // message_size
+                    buffer.putInt(7);           // correlation_id
+                    outputStream.write(buffer.array());
                     outputStream.flush();
                     clientSocket.close();
                 }
