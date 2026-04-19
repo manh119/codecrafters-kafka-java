@@ -18,31 +18,58 @@ public class Main {
         int port = 9092;
         try {
             serverSocket = new ServerSocket(port);
+            System.out.println("Server started on port " + port);
             // Since the tester restarts your program quite often, setting SO_REUSEADDR
             // ensures that we don't run into 'Address already in use' errors
             serverSocket.setReuseAddress(true);
             // Wait for connection from client.
-            clientSocket = serverSocket.accept();
+
         } catch (IOException e) {
             System.out.println("IOException: " + e.getMessage());
         } finally {
             try {
-                if (clientSocket != null) {
-                    InputStream inputStream = clientSocket.getInputStream();
-                    //System.out.println(Arrays.toString(inputStream.readAllBytes()));
-                    byte[] request_api_key = inputStream.readNBytes(2);
-                    byte[] request_api_version = inputStream.readNBytes(2);
-                    byte[] correlation_id = inputStream.readNBytes(4);
+                while (true) {
+                    clientSocket = serverSocket.accept();
+                    if (clientSocket != null) {
+                        InputStream inputStream = clientSocket.getInputStream();
 
-                    OutputStream outputStream = clientSocket.getOutputStream();
-                    ByteBuffer buffer = ByteBuffer.allocate(8);
-                    buffer.order(ByteOrder.BIG_ENDIAN);
-                    buffer.putInt(0);           // message_size
-                    buffer.put(correlation_id);           // correlation_id
-                    outputStream.write(buffer.array());
-                    outputStream.flush();
-                    clientSocket.close();
+// đọc size
+                        byte[] sizeBytes = inputStream.readNBytes(4);
+                        int size = ByteBuffer.wrap(sizeBytes).getInt();
+
+                        System.err.println("size=" + size);
+
+// đọc payload
+                        byte[] payload = inputStream.readNBytes(size);
+                        System.err.println("payload read");
+
+// parse correlation_id
+                        ByteBuffer req = ByteBuffer.wrap(payload);
+                        req.order(ByteOrder.BIG_ENDIAN);
+
+                        short apiKey = req.getShort();
+                        short apiVersion = req.getShort();
+                        int correlationId = req.getInt();
+
+                        System.err.println("correlationId=" + correlationId);
+
+// response
+                        OutputStream outputStream = clientSocket.getOutputStream();
+
+                        ByteBuffer resp = ByteBuffer.allocate(8);
+                        resp.order(ByteOrder.BIG_ENDIAN);
+                        resp.putInt(4);
+                        resp.putInt(correlationId);
+
+                        System.err.println("Sending response...");
+
+                        outputStream.write(resp.array());
+                        outputStream.flush();
+
+                    }
+                    //clientSocket.close();
                 }
+
             } catch (IOException e) {
                 System.out.println("IOException: " + e.getMessage());
             }
