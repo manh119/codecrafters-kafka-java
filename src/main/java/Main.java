@@ -6,6 +6,8 @@ import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Arrays;
 
 public class Main {
@@ -81,6 +83,65 @@ public class Main {
 
                 req.get(); // skip TAG_BUFFER
             }
+        }
+
+        /// Read log file
+        /// extract
+        /// - topicName
+        /// - topicId (UUID)
+        /// - partitionId
+        /// - leaderId
+        /// - replicas
+        ByteBuffer buf = ByteBuffer.wrap(
+                Files.readAllBytes(Paths.get(
+                        "/tmp/kraft-combined-logs/__cluster_metadata-0/00000000000000000000.log"
+                ))
+        );
+        buf.order(ByteOrder.BIG_ENDIAN);
+        System.out.println("Bytes from file " + Arrays.toString(buf.array()));
+        while (buf.hasRemaining()) {
+
+            if (buf.remaining() < 12) break;
+
+            long baseOffset = buf.getLong();
+            int batchLength = buf.getInt();
+            System.out.println("Batch length: " + batchLength);
+
+            int batchEnd = buf.position() + batchLength;
+
+            if (buf.remaining() < 49) break;
+            buf.position(buf.position() + 45); // skip header
+
+            int recordCount = buf.getInt();
+            System.out.println("Records count: " + recordCount);
+            for (int i = 0; i < recordCount; i++) {
+
+                int recordLength = buf.get();
+                int recordStart = buf.position();
+
+                buf.get(); // attributes
+                readVarInt(buf); // timestampDelta
+                readVarInt(buf); // offsetDelta
+
+                // key
+                int keyLen = readVarInt(buf);
+                if (keyLen > 0) buf.position(buf.position() + keyLen);
+                System.out.println("key len: " + keyLen);
+
+                // value
+                int valueLen = readVarInt(buf);
+                System.out.println("value len: " + valueLen);
+                if (valueLen > 0) {
+                    byte[] value = new byte[valueLen];
+                    buf.get(value);
+
+                    parseValue(value);
+                }
+
+                buf.position(recordStart + recordLength);
+            }
+
+            buf.position(batchEnd);
         }
 
         /// build body response
@@ -183,4 +244,35 @@ public class Main {
         buf.put(bytes);
     }
 
+
+    static int readVarInt(ByteBuffer buf) {
+        int value = 0;
+        int shift = 0;
+
+        while (true) {
+            byte b = buf.get();
+            value |= (b & 0x7F) << shift;
+
+            if ((b & 0x80) == 0) break;
+            shift += 7;
+        }
+
+        return value;
+    }
+
+    static void parseValue(byte[] value) {
+        ByteBuffer b = ByteBuffer.wrap(value);
+        b.order(ByteOrder.BIG_ENDIAN);
+
+        short version = b.getShort();   // skip version
+        byte recordType = b.get();      // 👈 KEY
+        System.out.println("Version: " + version);
+        System.out.println("RecordType: " + recordType);
+
+        if (recordType == 2) {
+            //parseTopicRecord(b);
+        } else if (recordType == 3) {
+            //parsePartitionRecord(b);
+        }
+    }
 }
