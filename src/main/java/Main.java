@@ -8,10 +8,12 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.Arrays;
+import java.util.*;
 
 public class Main {
     private static final int PORT = 9092;
+    private static Map<String, String> topicMap; // topic name -> topic id
+    private static Map<String, List<String>>
 
     public static void main(String[] args) {
         try {
@@ -35,7 +37,6 @@ public class Main {
                 try (Socket client = serverSocket.accept()) {
                     handleClient(client);
                 } catch (IOException e) {
-                    // Nếu socket bị đóng do shutdown hook, đừng in stacktrace rối mắt
                     if (!serverSocket.isClosed()) {
                         e.printStackTrace();
                     }
@@ -83,65 +84,67 @@ public class Main {
 
                 req.get(); // skip TAG_BUFFER
             }
-        }
 
-        /// Read log file
-        /// extract
-        /// - topicName
-        /// - topicId (UUID)
-        /// - partitionId
-        /// - leaderId
-        /// - replicas
-        ByteBuffer buf = ByteBuffer.wrap(
-                Files.readAllBytes(Paths.get(
-                        "/tmp/kraft-combined-logs/__cluster_metadata-0/00000000000000000000.log"
-                ))
-        );
-        buf.order(ByteOrder.BIG_ENDIAN);
-        System.out.println("Bytes from file " + Arrays.toString(buf.array()));
-        while (buf.hasRemaining()) {
 
-            if (buf.remaining() < 12) break;
+            /// Read log file
+            /// extract
+            /// - topicName
+            /// - topicId (UUID)
+            /// - array partitionId
+            ByteBuffer buf = ByteBuffer.wrap(
+                    Files.readAllBytes(Paths.get(
+                            "/tmp/kraft-combined-logs/__cluster_metadata-0/00000000000000000000.log"
+                    ))
+            );
+            buf.order(ByteOrder.BIG_ENDIAN);
+            System.out.println("Bytes from file " + Arrays.toString(buf.array()));
+            while (buf.hasRemaining()) {
 
-            long baseOffset = buf.getLong();
-            int batchLength = buf.getInt();
-            System.out.println("Batch length: " + batchLength);
+                if (buf.remaining() < 12) break;
 
-            int batchEnd = buf.position() + batchLength;
+                long baseOffset = buf.getLong();
+                int batchLength = buf.getInt();
+                System.out.println("Batch length: " + batchLength);
 
-            if (buf.remaining() < 49) break;
-            buf.position(buf.position() + 45); // skip header
+                int batchEnd = buf.position() + batchLength;
 
-            int recordCount = buf.getInt();
-            System.out.println("Records count: " + recordCount);
-            for (int i = 0; i < recordCount; i++) {
+                if (buf.remaining() < 49) break;
+                buf.position(buf.position() + 45); // skip header
 
-                int recordLength = buf.get();
-                int recordStart = buf.position();
+                int recordCount = buf.getInt();
+                System.out.println("");
+                System.out.println("Records count: " + recordCount);
+                for (int i = 0; i < recordCount; i++) {
+                    System.out.println("");
+                    System.out.println("record: " + i);
+                    int recordLength = buf.get();
+                    int recordStart = buf.position();
 
-                buf.get(); // attributes
-                readVarInt(buf); // timestampDelta
-                readVarInt(buf); // offsetDelta
+                    buf.get(); // attributes
+                    readSignedVarInt(buf); // timestampDelta
+                    readSignedVarInt(buf); // offsetDelta
 
-                // key
-                int keyLen = readVarInt(buf);
-                if (keyLen > 0) buf.position(buf.position() + keyLen);
-                System.out.println("key len: " + keyLen);
+                    // key
+                    int keyLen = readSignedVarInt(buf);
+                    if (keyLen > 0) buf.position(buf.position() + keyLen);
+                    System.out.println("key len: " + keyLen);
 
-                // value
-                int valueLen = readVarInt(buf);
-                System.out.println("value len: " + valueLen);
-                if (valueLen > 0) {
-                    byte[] value = new byte[valueLen];
-                    buf.get(value);
+                    // value
+                    int valueLen = readSignedVarInt(buf);
+                    System.out.println("value len: " + valueLen);
+                    if (valueLen > 0) {
+                        byte[] value = new byte[valueLen];
+                        buf.get(value);
 
-                    parseValue(value);
+                        parseValue(value);
+                    }
+
+                    buf.position(recordStart + recordLength);
                 }
 
-                buf.position(recordStart + recordLength);
+                buf.position(batchEnd);
             }
 
-            buf.position(batchEnd);
         }
 
         /// build body response
@@ -260,19 +263,73 @@ public class Main {
         return value;
     }
 
+    static int readSignedVarInt(ByteBuffer buf) {
+        int raw = readVarInt(buf);
+        return (raw >>> 1) ^ -(raw & 1);
+    }
+
+
     static void parseValue(byte[] value) {
         ByteBuffer b = ByteBuffer.wrap(value);
         b.order(ByteOrder.BIG_ENDIAN);
 
-        short version = b.getShort();   // skip version
-        byte recordType = b.get();      // 👈 KEY
-        System.out.println("Version: " + version);
+        byte frameVersion = b.get();
+        byte recordType = b.get();
+        byte version = b.get();
+        System.out.println("frameVersion: " + frameVersion);
         System.out.println("RecordType: " + recordType);
+        System.out.println("version: " + frameVersion);
 
-        if (recordType == 2) {
-            //parseTopicRecord(b);
+        if (recordType == 12) {
+            //parseFeatureLevelRecord(b); // feature level record
+        } else if (recordType == 2) {
+            parseTopicRecord(b); // topic record
         } else if (recordType == 3) {
-            //parsePartitionRecord(b);
+            parsePartitionRecord(b); // partition record
         }
+    }
+
+    ///  start from partition id
+    /// - topicId (UUID)
+    /// - array partitionId
+    private static void parsePartitionRecord(ByteBuffer b) {
+        int partitionId = b.getInt();
+        long msb = b.getLong();
+        long lsb = b.getLong();
+
+        UUID topicId = new UUID(msb, lsb);
+
+        System.out.println("partitionId: " + partitionId);
+        System.out.println("topic id: " + topicId);
+
+        int replicaCount = readSignedVarInt(b);
+
+        List<Integer> replicas = new ArrayList<>();
+        for (int i = 0; i < replicaCount; i++) {
+            int replicaId = b.getInt(); // big-endian mặc định
+            replicas.add(replicaId);
+        }
+        System.out.println("replicas: " + replicas);
+    }
+
+    ///  start from name length
+    /// - topicName
+    /// - topicId (UUID)
+    private static void parseTopicRecord(ByteBuffer b) {
+        // đọc topic name (COMPACT_STRING)
+        int nameLength = readVarInt(b) - 1;
+        byte[] topicName = new byte[nameLength];
+        b.get(topicName);
+        String topicNameString = new String(topicName, StandardCharsets.UTF_8);
+
+        System.out.println("topic name: " + topicNameString);
+
+        // 👉 đọc UUID (16 bytes)
+        long msb = b.getLong(); // 8 bytes đầu
+        long lsb = b.getLong(); // 8 bytes sau
+
+        UUID topicId = new UUID(msb, lsb);
+
+        System.out.println("topic id: " + topicId);
     }
 }
