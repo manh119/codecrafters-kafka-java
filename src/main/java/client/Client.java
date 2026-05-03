@@ -9,6 +9,8 @@ import message.describetopic.DescribeTopicPartitionsRequestV0;
 import message.describetopic.DescribeTopicPartitionsResponseV0;
 import message.fetch.FetchRequestV16;
 import message.fetch.FetchResponseV16;
+import message.produce.ProduceRequestV11;
+import message.produce.ProduceResponseV11;
 import protocol.*;
 import protocol.io.DataInputStream;
 import protocol.io.DataOutputStream;
@@ -85,6 +87,11 @@ public class Client implements Runnable {
             case FetchRequestV16 fetchRequest -> new Response(
                     new Header.V1(request.header().correlationId()),
                     handleFetchRequest(fetchRequest)
+            );
+
+            case ProduceRequestV11 produceRequestV11 -> new Response(
+                    new Header.V1(request.header().correlationId()),
+                    handleProduceRequest(produceRequestV11)
             );
 
             default -> null;
@@ -206,6 +213,59 @@ public class Client implements Runnable {
         }
 
         return new FetchResponseV16(
+                Duration.ZERO,
+                ErrorCode.NONE,
+                request.sessionId(),
+                responses
+        );
+    }
+
+    private ProduceResponseV11 handleProduceRequest(ProduceRequestV11 request) {
+        final var responses = new ArrayList<ProduceResponseV11.Response>();
+
+        for (final var topicRequest : request.topics()) {
+            final var topicRecord = kafka.getTopic(topicRequest.topicId());
+
+            if (topicRecord == null) {
+                responses.add(new ProduceResponseV11.Response(
+                        topicRequest.topicId(),
+                        List.of(
+                                new ProduceResponseV11.Response.Partition(
+                                        0,
+                                        ErrorCode.UNKNOWN_TOPIC_ID,
+                                        0,
+                                        0,
+                                        0,
+                                        Collections.emptyList(),
+                                        0,
+                                        new byte[0]
+                                )
+                        )
+                ));
+
+                continue;
+            }
+
+            final var partitionResponses = new ArrayList<ProduceResponseV11.Response.Partition>();
+            for (final var partitionRequest : topicRequest.partitions()) {
+                partitionResponses.add(new ProduceResponseV11.Response.Partition(
+                        partitionRequest.partition(),
+                        ErrorCode.NONE,
+                        0,
+                        0,
+                        0,
+                        Collections.emptyList(),
+                        0,
+                        kafka.getRecordData(topicRecord.name(), partitionRequest.partition())
+                ));
+            }
+            responses.add(new ProduceResponseV11.Response(
+                    topicRequest.topicId(),
+                    partitionResponses
+            ));
+        }
+
+        return new ProduceResponseV11(
                 Duration.ZERO,
                 ErrorCode.NONE,
                 request.sessionId(),
