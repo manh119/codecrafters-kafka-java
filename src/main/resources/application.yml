@@ -1,0 +1,14 @@
+spring:
+  application:
+    name: kafka-java
+
+broker:
+  port: 10000
+
+queue:
+  max-message-size: 255
+  capacity: 10000
+
+logging:
+  level:
+    com.kafka: DEBUG
