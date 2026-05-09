@@ -53,6 +53,17 @@ public class KafkaApplication implements ApplicationRunner {
                 new ProducerService(port, topicId).startProducerServer(); // blocking
             }
 
+            case "consumer" -> {
+                if (nonOptionArgs.size() < 3) {
+                    log.error("Usage: producer <port> <topicId>");
+                    System.exit(1);
+                }
+                int port    = Integer.parseInt(nonOptionArgs.get(1));
+                int topicId = Integer.parseInt(nonOptionArgs.get(2));
+                log.info("Starting consumer: port={}, consumerGroupId={}", port, topicId);
+                new Consumer(port, topicId).startConsumerServer(); // blocking
+            }
+
             default -> {
                 log.info("Unknown mode '{}', starting echo com.kafka.client on port 10000", nonOptionArgs.get(0));
                 new EchoClient(10000).run();

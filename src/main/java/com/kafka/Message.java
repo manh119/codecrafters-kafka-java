@@ -26,11 +26,13 @@ public class Message {
     private final String                  echo;
     private final ProducerRegisterMessage pReg;
     private final byte[]                  pcm;
+    protected final ConsumerRegisterMessage cReg;
 
     // Response fields
     private final String rEcho;
     private final Byte   rPReg;
     private final Byte   rPcm;
+    private final Byte rCcm;
 
     // ------------------------------------------------------------------
     // Read
@@ -61,6 +63,7 @@ public class Message {
             case MessageType.R_P_REG -> Message.builder().rPReg(data[0]).build();
             case MessageType.PCM    -> Message.builder().pcm(data).build();
             case MessageType.R_PCM  -> Message.builder().rPcm(data[0]).build();
+            case MessageType.R_CCM ->  Message.builder().rCcm(data[0]).build();
             default -> throw new IllegalArgumentException("Unknown com.kafka.message type: " + type);
         };
     }
@@ -88,6 +91,8 @@ public class Message {
             writePayload(out, MessageType.PCM, pcm);
         } else if (rPcm != null) {
             writePayload(out, MessageType.R_PCM, new byte[]{rPcm});
+        } else if (cReg != null) {
+            writePayload(out, MessageType.C_REG, cReg.toBytes());
         }
         out.flush();
     }
