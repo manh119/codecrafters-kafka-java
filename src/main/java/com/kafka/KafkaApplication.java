@@ -55,7 +55,7 @@ public class KafkaApplication implements ApplicationRunner {
 
             case "consumer" -> {
                 if (nonOptionArgs.size() < 3) {
-                    log.error("Usage: producer <port> <topicId>");
+                    log.error("Usage: consumer <port> <topicId>");
                     System.exit(1);
                 }
                 int port    = Integer.parseInt(nonOptionArgs.get(1));

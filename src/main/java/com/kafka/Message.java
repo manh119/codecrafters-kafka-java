@@ -27,12 +27,14 @@ public class Message {
     private final ProducerRegisterMessage pReg;
     private final byte[]                  pcm;
     protected final ConsumerRegisterMessage cReg;
+    private final byte[]                  bcm; // broker -> consumer message
 
     // Response fields
     private final String rEcho;
     private final Byte   rPReg;
     private final Byte   rPcm;
-    private final Byte rCcm;
+    private final Byte   rCReg;
+    private final Byte   rBcm; // response broker to consumer message
 
     // ------------------------------------------------------------------
     // Read
@@ -59,11 +61,18 @@ public class Message {
         return switch (type) {
             case MessageType.ECHO   -> Message.builder().echo(new String(data, StandardCharsets.UTF_8)).build();
             case MessageType.R_ECHO -> Message.builder().rEcho(new String(data, StandardCharsets.UTF_8)).build();
+
             case MessageType.P_REG  -> Message.builder().pReg(ProducerRegisterMessage.fromBytes(data)).build();
             case MessageType.R_P_REG -> Message.builder().rPReg(data[0]).build();
+
             case MessageType.PCM    -> Message.builder().pcm(data).build();
             case MessageType.R_PCM  -> Message.builder().rPcm(data[0]).build();
-            case MessageType.R_CCM ->  Message.builder().rCcm(data[0]).build();
+
+            case MessageType.C_REG ->  Message.builder().cReg(ConsumerRegisterMessage.fromBytes(data)).build();
+            case MessageType.R_C_REG ->  Message.builder().rCReg(data[0]).build();
+
+            //case MessageType. ->  Message.builder().rCcm(data[0]).build();
+            //case MessageType.R_CCM ->  Message.builder().rCcm(data[0]).build();
             default -> throw new IllegalArgumentException("Unknown com.kafka.message type: " + type);
         };
     }

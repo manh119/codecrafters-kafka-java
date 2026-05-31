@@ -86,6 +86,11 @@ public class BrokerService {
             Byte reply = processProducerRegisterMessage(message.getPReg());
             return Message.builder().rPReg(reply).build();
         }
+
+        if (message.getCReg() != null) {
+            Byte reply = processProducerRegisterMessage(message.getPReg());
+            return Message.builder().rPReg(reply).build();
+        }
         return null;
     }
 
@@ -155,6 +160,26 @@ public class BrokerService {
         }
     }
 
+    private void connectToConsumer(int port, int topicIdx) {
+        try (Socket conn = new Socket("localhost", port);
+             var in  = new DataInputStream(conn.getInputStream());
+             var out = new DataOutputStream(conn.getOutputStream())) {
+
+            log.info("Connected to consumer server at port {}", port);
+
+            // event loop
+            while (true) {
+                Message msg = Message.readFrom(in);
+                if (msg.getRPcm() != null) {
+                    byte result = processProducerPCM(msg.getPcm(), topicIdx);
+                    Message.builder().rPcm(result).build().writeTo(out);
+                }
+            }
+        } catch (IOException e) {
+            log.error("Producer connection on port {} ended: {}", port, e.getMessage());
+        }
+    }
+
     // ------------------------------------------------------------------
     // processProducerPCM — mirrors Go's processProducerPCM()
     // ------------------------------------------------------------------
@@ -162,6 +187,31 @@ public class BrokerService {
     private synchronized byte processProducerPCM(byte[] pcm, int topicIdx) {
         topics.get(topicIdx).getMq().push(pcm);
         topics.get(topicIdx).getMq().debug();
+        return (byte) 0;
+    }
+
+    private synchronized Byte processConsumerRegisterMessage(ConsumerRegisterMessage consumerRegisterMessage) {
+        log.info("Broker received consumer message: port={}, topicId={}", consumerRegisterMessage.getPort(), consumerRegisterMessage.getTopicId());
+
+        // Find or create topic
+        int topicIdx = -1;
+        for (int i = 0; i < topics.size(); i++) {
+            if (topics.get(i).getTopicId() == pReg.getTopicId()) {
+                topicIdx = i;
+                break;
+            }
+        }
+        if (topicIdx == -1) {
+            MessageQueue mq = queueFactory.getObject();
+            topics.add(new Topic(pReg.getTopicId(), mq));
+            topicIdx = topics.size() - 1;
+        }
+
+        final int finalTopicIdx = topicIdx;
+
+        // Dial back to producer on its port — mirrors Go's goroutine
+        Thread.ofVirtual().start(() -> connectToProducer(pReg.getPort(), finalTopicIdx));
+
         return (byte) 0;
     }
 }

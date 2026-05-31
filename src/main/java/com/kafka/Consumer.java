@@ -40,8 +40,8 @@ public class Consumer {
 
                 log.info("Broker connected to consumer on port {}", port);
 
-                String line;
-                while (in. != null) {
+                String line = null;
+                while (in != null) {
                     line = line + "\n"; // preserve Go's ReadString('\n') behaviour
 
                     // Send PCM
