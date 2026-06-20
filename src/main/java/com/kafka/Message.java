@@ -9,9 +9,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 /**
- * Mirrors Go's com.kafka.Message struct.
  *
- * Wire format (from com.kafka.message.go):
+ * Wire format:
  *   byte[0]  : total payload length  (stream[0] = size)
  *   byte[1]  : com.kafka.message type
  *   byte[2…] : payload
@@ -26,7 +25,7 @@ public class Message {
     private final String                  echo;
     private final ProducerRegisterMessage pReg;
     private final byte[]                  pcm;
-    protected final ConsumerRegisterMessage cReg;
+    private final ConsumerRegisterMessage cReg;
     private final byte[]                  bcm; // broker -> consumer message
 
     // Response fields
@@ -41,7 +40,7 @@ public class Message {
     // ------------------------------------------------------------------
 
     /**
-     * Reads exactly one com.kafka.Message from the stream (mirrors readMessageFromStream + parseMessage).
+     * Reads exactly one Message from the stream
      *
      * Protocol:
      *   1 byte  – payload length (N)
@@ -82,7 +81,7 @@ public class Message {
     // ------------------------------------------------------------------
 
     /**
-     * Writes this com.kafka.Message to the stream (mirrors writeMessageToStream in Go).
+     * Writes this com.kafka.Message to the stream
      *
      * Format per field:
      *   [length_byte][type_byte][data...]

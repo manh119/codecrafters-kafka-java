@@ -70,7 +70,7 @@ public class Consumer {
             Message.builder().cReg(cReg).build().writeTo(out);
 
             Message resp = Message.readFrom(in);
-            log.info("Received R_C_REG from broker: {}", resp.getRCcm());
+            //log.info("Received R_C_REG from broker: {}", resp.getRCcm());
         }
     }
 }

@@ -6,7 +6,6 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * Mirrors Go's com.kafka.ConsumerRegisterMessage struct.
  * Wire format: [port_hi, port_lo, topicId_hi, topicId_lo] — 4 bytes total.
  */
 @Getter
@@ -15,11 +14,11 @@ import lombok.Setter;
 @AllArgsConstructor
 public class ConsumerRegisterMessage {
 
-    private int port;    // uint16 in Go → int in Java (0–65535)
-    private int topicId; // uint16 in Go → int in Java (0–65535)
+    private int port;
+    private int topicId;
 
     /**
-     * Deserialise from the 4-byte wire payload (mirrors fromByte in Go).
+     * Deserialise from the 4-byte wire payload
      */
     public static ConsumerRegisterMessage fromBytes(byte[] data) {
         int port    = ((data[0] & 0xFF) << 8) | (data[1] & 0xFF);
@@ -28,7 +27,7 @@ public class ConsumerRegisterMessage {
     }
 
     /**
-     * Serialise to the 4-byte wire payload (mirrors toByte in Go).
+     * Serialise to the 4-byte wire payload
      */
     public byte[] toBytes() {
         return new byte[]{

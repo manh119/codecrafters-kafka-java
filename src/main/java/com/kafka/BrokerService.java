@@ -43,9 +43,8 @@ public class BrokerService {
     // ------------------------------------------------------------------
 
     /**
-     * Blocking server loop — mirrors Go's startBrokerServer().
-     * Each accepted connection is handled synchronously (one com.kafka.message per connection),
-     * matching the Go behaviour.
+     * Blocking server loop
+     * Each accepted connection is handled synchronously
      */
     public void startBrokerServer() throws IOException {
         try (ServerSocket server = new ServerSocket(brokerPort)) {
@@ -59,16 +58,16 @@ public class BrokerService {
     }
 
     private void handleConnection(Socket conn) {
-        try (conn;
-             var in  = new DataInputStream(conn.getInputStream());
-             var out = new DataOutputStream(conn.getOutputStream())) {
+        try (
+             DataInputStream in  = new DataInputStream(conn.getInputStream());
+             DataOutputStream out = new DataOutputStream(conn.getOutputStream())) {
 
             Message msg = Message.readFrom(in);
             Message response = processBrokerMessage(msg);
             if (response != null) {
                 response.writeTo(out);
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             log.error("Error handling connection: {}", e.getMessage());
         }
     }
@@ -88,8 +87,8 @@ public class BrokerService {
         }
 
         if (message.getCReg() != null) {
-            Byte reply = processProducerRegisterMessage(message.getPReg());
-            return Message.builder().rPReg(reply).build();
+            Byte reply = processConsumerRegisterMessage(message.getCReg());
+            return Message.builder().rCReg(reply).build();
         }
         return null;
     }
@@ -192,26 +191,26 @@ public class BrokerService {
 
     private synchronized Byte processConsumerRegisterMessage(ConsumerRegisterMessage consumerRegisterMessage) {
         log.info("Broker received consumer message: port={}, topicId={}", consumerRegisterMessage.getPort(), consumerRegisterMessage.getTopicId());
-
-        // Find or create topic
-        int topicIdx = -1;
-        for (int i = 0; i < topics.size(); i++) {
-            if (topics.get(i).getTopicId() == pReg.getTopicId()) {
-                topicIdx = i;
-                break;
-            }
-        }
-        if (topicIdx == -1) {
-            MessageQueue mq = queueFactory.getObject();
-            topics.add(new Topic(pReg.getTopicId(), mq));
-            topicIdx = topics.size() - 1;
-        }
-
-        final int finalTopicIdx = topicIdx;
-
-        // Dial back to producer on its port — mirrors Go's goroutine
-        Thread.ofVirtual().start(() -> connectToProducer(pReg.getPort(), finalTopicIdx));
-
+//
+//        // Find or create topic
+//        int topicIdx = -1;
+//        for (int i = 0; i < topics.size(); i++) {
+//            if (topics.get(i).getTopicId() == pReg.getTopicId()) {
+//                topicIdx = i;
+//                break;
+//            }
+//        }
+//        if (topicIdx == -1) {
+//            MessageQueue mq = queueFactory.getObject();
+//            topics.add(new Topic(pReg.getTopicId(), mq));
+//            topicIdx = topics.size() - 1;
+//        }
+//
+//        final int finalTopicIdx = topicIdx;
+//
+//        // Dial back to producer on its port — mirrors Go's goroutine
+//        Thread.ofVirtual().start(() -> connectToProducer(pReg.getPort(), finalTopicIdx));
+//
         return (byte) 0;
     }
 }
